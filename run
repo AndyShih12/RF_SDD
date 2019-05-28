@@ -1,0 +1,28 @@
+#!/bin/bash
+
+function jsonValue() {
+KEY=$1
+num=$2
+awk -F":" '{for(i=1;i<=NF;i++){if($i~/'$KEY'\042/){print $(i+1)}}}' | tr -d '",' | sed -n $((${num}+1))p | tr -d ' '
+}
+
+# give's jython extra access
+export JYTHON_OPTS="-Dpython.security.respectJavaAccessibility=false"
+# give JVM some memory
+export JAVA_MEM=-Xmx3500m
+
+set -x
+mkdir -p working/
+
+RAW_CONFIG_FILE="config.json"
+CONFIG_FILE="working/config_minify.json"
+python src/utils/config_minify.py ${RAW_CONFIG_FILE} ${CONFIG_FILE}
+dataset=$(cat ${CONFIG_FILE} | jsonValue dataset)
+
+mkdir -p working/${dataset}/binarized_data/
+mkdir -p working/${dataset}/random_forests/
+mkdir -p output/${dataset}
+
+jython src/train_rf.py ${CONFIG_FILE} | tee -a working/${dataset}/log.txt
+python src/binarize.py ${CONFIG_FILE} | tee -a working/${dataset}/log.txt
+python src/compile_rf.py ${CONFIG_FILE} | tee -a working/${dataset}/log.txt

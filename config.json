@@ -1,0 +1,31 @@
+{
+  "dataset": "magic",
+
+  "train_filename": "data/%s/%s.train.csv",
+  "test_filename": "data/%s/%s.test.csv",
+
+  "rf_basename": "working/%s/random_forests/%s-%%d.tree",
+  "binarized_rf_basename": "working/%s/random_forests/%s-%%d-binarized.tree",
+
+  "binarized_train_filename": "working/%s/binarized_data/%s_binary.train.csv",
+  "binarized_test_filename": "working/%s/binarized_data/%s_binary.test.csv",
+  "discretized_train_filename": "working/%s/binarized_data/%s_discrete.train.csv",
+  "discretized_test_filename": "working/%s/binarized_data/%s_discrete.test.csv",
+  "constraint_filename_working": "working/%s/binarized_data/%s.constraints.txt",
+  "constraint_filename_output": "output/%s/%s.constraints.txt",
+
+  // These are the filenames for sdd/vtree/constraint-sdd output files.
+  "sdd_filename": "output/%s/%s.sdd",
+  "vtree_filename": "output/%s/%s.vtree",
+  "constraint_sdd_filename": "output/%s/%s_constraint.sdd",
+  "constraint_vtree_filename": "output/%s/%s_constraint.vtree",
+ 
+  // This is the number of trees to use in the random forest.
+  "tree_count": 10,
+
+  // This is the maximum depth for a tree in the random forest.
+  "tree_depth": 5,
+
+  // 1.0 for exact compilation. Ratio of x means collapse thresholds within a factor of x of each other.
+  "threshold_ratio": 2.0
+}
