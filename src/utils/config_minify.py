@@ -20,6 +20,7 @@ def minify(config_file, config_minify_file):
 
   open(config_minify_file, "w+", 1).write(json_string) # open and write json_string to file
 
+  print json_data["dataset"]
 
 config_file = sys.argv[1] # get arguments passed to command line excluding first arg
 config_minify_file = sys.argv[2]
