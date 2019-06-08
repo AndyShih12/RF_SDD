@@ -12,7 +12,7 @@
   "discretized_train_filename": "working/%s/binarized_data/%s_discrete.train.csv",
   "discretized_test_filename": "working/%s/binarized_data/%s_discrete.test.csv",
   "constraint_filename_working": "working/%s/binarized_data/%s.constraints.txt",
-  "constraint_filename_output": "output/%s/%s.constraints.txt",
+  "constraint_filename_output": "output/%s/%s.txt",
 
   // These are the filenames for sdd/vtree/constraint-sdd output files.
   "sdd_filename": "output/%s/%s.sdd",

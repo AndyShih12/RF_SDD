@@ -132,9 +132,30 @@ def forest_sdds_iter(tree_states,sdd_state):
 def encode_logical_constraints(constraint_filename, mgr, domain):
     with open(constraint_filename, "r") as f:
         lines = f.readlines()
-    lines = lines[1:]
 
-    constraints = [tuple(x.strip().split(" ")) for x in lines]
+    lines = [line.strip().split(" ")[1:] for line in lines]
+    num_variables = int(lines[0][0])
+
+    constraints = []
+    cur = None
+
+    for i in xrange(num_variables):
+        name = lines[2*i+1][0]
+        metadata = lines[2*i+2]
+        key, thresh = metadata[0], float(metadata[1])
+
+        if cur and cur[0] != key:
+            constraints.append( (cur[0] + "_%d", len(cur[1])) + tuple(cur[1]) )
+            cur = None
+
+        if not cur:
+            cur = (key, [thresh])
+        else:
+            cur[1].append(thresh)
+    constraints.append( (cur[0] + "_%d", len(cur[1])) + tuple(cur[1]) )
+ 
+    #print constraints
+
     alpha = sdd.sdd_manager_true(mgr)
 
     for c in constraints:

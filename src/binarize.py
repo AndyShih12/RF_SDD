@@ -183,20 +183,25 @@ def binarize_tree_states(tree_states, domain, pairs_dict, binarized_tree_basenam
             os.makedirs(os.path.dirname(filename))
         tree.write(filename)
 
-def write_constraints(domain, pairs_dict, constraint_filenames):
+def write_constraints(domain, pairs_dict, constraint_filenames, constraint_sdd_filename, constraint_vtree_filename):
     constraints = []
 
     for k,v in pairs_dict.iteritems():
-        cur = k + "_" + "%d"
+        cur = k
         constraints.append((cur,len(v)) + tuple(v))
 
     for filename in constraint_filenames:
         if not os.path.exists(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
         with open(filename,"w") as f:
-            f.write("%d\n" % len(constraints))
+            f.write("num_variables: %d\n" % sum([c[1] for c in constraints]))
             for c in constraints:
-                f.write("%s\n" % " ".join(map(str,c)))
+                granularity = c[1]
+                for i in xrange(granularity):
+                    name = c[0]
+                    thresh = c[i + 2]
+                    f.write("name: %s_%d\n" % (name, i))
+                    f.write("metadata: %s %f\n" % (name, thresh))
 
 def run():
     with timer.Timer("reading dataset"):
@@ -230,7 +235,7 @@ def run():
         binarize_tree_states(tree_states, domain, pairs_dict, binarized_tree_basename)
 
     with timer.Timer("writing constraints"):
-        write_constraints(domain, pairs_dict, [constraint_filename_working, constraint_filename_output])
+        write_constraints(domain, pairs_dict, [constraint_filename_working, constraint_filename_output], constraint_sdd_filename, constraint_vtree_filename)
 
     print "\tdiscretization: "
     for k,v in pairs_dict.iteritems():
@@ -257,6 +262,8 @@ if __name__ == '__main__':
     discretized_test_filename = config_json["discretized_test_filename"]
     constraint_filename_working = config_json["constraint_filename_working"]
     constraint_filename_output = config_json["constraint_filename_output"]
+    constraint_sdd_filename = config_json["constraint_sdd_filename"]
+    constraint_vtree_filename = config_json["constraint_vtree_filename"]
     num_trees = config_json["tree_count"]
     threshold_ratio = config_json["threshold_ratio"]
 
