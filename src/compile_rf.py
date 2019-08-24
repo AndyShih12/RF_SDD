@@ -18,11 +18,10 @@ import argparse
 ############################################################
 
 class TreeState:
-    def __init__(self,tree,domain=None,constraint_info=None,constraint_sdd=None):
+    def __init__(self,tree,domain=None,constraint_info=None):
         self.tree = tree
         self.domain = domain
         self.constraint_info = constraint_info
-        self.constraint_sdd = constraint_sdd
 
         nodes = tree.nodes()
         root = tree.in_degree(nodes).index(0)
@@ -101,8 +100,6 @@ def compile_tree(node,tree_state,sdd_state,label="0",st=None,path_sdd=None):
                 for i in xrange(low_index, cur_index + 1):
                     sdd_lit = tree_state.domain[base_var % i]
                     beta = sdd.sdd_disjoin(beta, sdd.sdd_manager_literal(sdd_lit,mgr), mgr)
-
-            constraint_sdd = tree_state.constraint_sdd
 
             sdd_var = tree_state.domain[var]
             new_path_sdd = sdd.sdd_conjoin(path_sdd,beta,mgr)
@@ -394,7 +391,7 @@ def run():
         tree_states = []
         for filename in sorted(glob.glob(tree_basename.replace('%d','*'))):
             tree = pygv.AGraph(filename)
-            tree_state = TreeState(tree,domain,constraint_info,constraint_sdd)
+            tree_state = TreeState(tree,domain,constraint_info)
             tree_states.append(tree_state)
             #tree.layout(prog='dot')
             #tree.draw(filename+".png")
