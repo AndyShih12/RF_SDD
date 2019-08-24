@@ -75,7 +75,7 @@ def binarize(tree_states, header_test):
         for vv in v:
             if not coarse_v or (coarse_v[-1]*ratio < vv and vv*ratio > coarse_v[-1]):
                 coarse_v.append(vv)
- 
+        coarse_v.append(float('inf')) # add an artificial +inf threshold
         pairs_dict_coarse[k] = coarse_v
     
     # end epsilon-closeness discretization
@@ -91,21 +91,33 @@ def binarize(tree_states, header_test):
         if k not in pairs_dict: pairs_dict[k] = [0] 
         v = pairs_dict[k]
         sorted_pairs_dict[k] = v
-        for i in xrange(len(v)):
+        for i in xrange(len(v)): # len(v) thresholds, so len(v) binary variable to encode
             domain[k + '_' + str(i)] = len(domain) + 1
         
 
     return domain, sorted_pairs_dict
 
+def get_interval_index(value, intervals):
+    last_value = float('-inf')
+    for i, cur_value in enumerate(intervals):
+        if value < cur_value and value >= last_value:
+            return i
+        last_value = cur_value
+    
+    assert(False)
+
 def binarize_dataset(dataset, domain, pairs_dict, header, binarized_test_filename):
+    print domain
+    print pairs_dict
+
     binarized_dataset = []
     for data in dataset:
         binarized_data = [0 for _ in xrange(len(domain)+1)]
         for k,v in pairs_dict.iteritems():
             var = k
-            for i,vv in enumerate(v):
-                index = domain[var + "_" + str(i)]
-                binarized_data[index] = (int)(data[header[var]] >= vv)
+            interval_index = get_interval_index(data[header[var]], v)
+            domain_index = domain[var + "_" + str(interval_index)]
+            binarized_data[domain_index] = 1
 
         binarized_data[0] = (int)(data[0] == 1)
         binarized_dataset.append(binarized_data)
@@ -134,9 +146,8 @@ def discretize_dataset(dataset, domain, pairs_dict, header, discretized_test_fil
         cnt = 1
         for k,v in pairs_dict.iteritems():
             var = k
-            for i,vv in enumerate(v):
-                if (data[header[var]] >= vv):
-                  discretized_data[cnt] = i+1
+            interval_index = get_interval_index(data[header[var]], v)
+            discretized_data[cnt] = interval_index
             cnt += 1
 
         discretized_data[0] = (int)(data[0] == 1)
@@ -155,6 +166,7 @@ def binarize_tree_states(tree_states, domain, pairs_dict, binarized_tree_basenam
     for (k,tree_state) in enumerate(tree_states):
         tree = tree_state.tree
         for node in tree.nodes():
+            # binarizing leaves
             if not len(tree.out_neighbors(node)):
                 parts = node.attr['label'].split(" ")
                 parts[2] = "1" if float(parts[2]) >= 0.5 else "0"
@@ -173,7 +185,7 @@ def binarize_tree_states(tree_states, domain, pairs_dict, binarized_tree_basenam
                         closeness = abs(val-vv)
                         closest_i = i
             
-                new_label = " = %d" % (1 if edge.attr['label'].split(' ')[1] == ">=" else 0)
+                new_label = edge.attr['label'].split(' ')[1]  # " = %d" % (1 if edge.attr['label'].split(' ')[1] == ">=" else 0)
                 edge.attr['label'] = new_label
                 
                 node.attr['label'] = base_label + "_" + str(closest_i)

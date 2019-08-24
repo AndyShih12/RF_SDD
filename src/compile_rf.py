@@ -18,9 +18,11 @@ import argparse
 ############################################################
 
 class TreeState:
-    def __init__(self,tree,domain=None):
+    def __init__(self,tree,domain=None,constraint_info=None,constraint_sdd=None):
         self.tree = tree
         self.domain = domain
+        self.constraint_info = constraint_info
+        self.constraint_sdd = constraint_sdd
 
         nodes = tree.nodes()
         root = tree.in_degree(nodes).index(0)
@@ -86,9 +88,23 @@ def compile_tree(node,tree_state,sdd_state,label="0",st=None,path_sdd=None):
             child_st = st + "%s:%s " % (var,val)
 
             # extend path
+            base_var = "_".join(var.split('_')[:-1]) + "_%d"
+            cur_index = int(var.split('_')[-1])
+            low_index, high_index = 0, tree_state.constraint_info[base_var][0]
+
+            beta = sdd.sdd_manager_false(mgr)
+            if val == ">=":
+                for i in xrange(cur_index + 1, high_index):
+                    sdd_lit = tree_state.domain[base_var % i]
+                    beta = sdd.sdd_disjoin(beta, sdd.sdd_manager_literal(sdd_lit,mgr), mgr)
+            else: # val == "<"
+                for i in xrange(low_index, cur_index + 1):
+                    sdd_lit = tree_state.domain[base_var % i]
+                    beta = sdd.sdd_disjoin(beta, sdd.sdd_manager_literal(sdd_lit,mgr), mgr)
+
+            constraint_sdd = tree_state.constraint_sdd
+
             sdd_var = tree_state.domain[var]
-            sdd_lit = sdd_var if val == "1" else -sdd_var
-            beta = sdd.sdd_manager_literal(sdd_lit,mgr)
             new_path_sdd = sdd.sdd_conjoin(path_sdd,beta,mgr)
             sdd_state.used_vars.add(sdd_var)
 
@@ -108,7 +124,7 @@ def forest_sdds_iter(tree_states,sdd_state):
         sdd_state.alpha = false_sdd
         sdd_state.used_vars = set()
         compile_tree(tree_state.root,tree_state,sdd_state,label="1")
-       
+        #print sdd.sdd_global_model_count(sdd_state.alpha, sdd_state.manager)
         ''' 
         if OPTIONS.majority_circuit_opt:
             mgr = sdd_state.manager
@@ -129,6 +145,24 @@ def forest_sdds_iter(tree_states,sdd_state):
 
         yield sdd_state.alpha, sdd_state.used_vars
 
+def encode_unique_constraint(values, mgr):
+    alpha = sdd.sdd_manager_true(mgr)
+
+    # at most one
+    for v1 in values:
+        for v2 in values:
+            if v1 == v2: continue
+            beta = sdd.sdd_disjoin(sdd.sdd_manager_literal(-1*v1,mgr), sdd.sdd_manager_literal(-1*v2,mgr), mgr)
+            alpha = sdd.sdd_conjoin(alpha, beta, mgr)
+
+    # at least one
+    beta = sdd.sdd_manager_false(mgr)
+    for v in values:
+      beta = sdd.sdd_disjoin(beta, sdd.sdd_manager_literal(v,mgr), mgr) 
+    alpha = sdd.sdd_conjoin(alpha, beta, mgr)
+
+    return alpha
+
 def encode_logical_constraints(constraint_filename, mgr, domain):
     with open(constraint_filename, "r") as f:
         lines = f.readlines()
@@ -136,7 +170,7 @@ def encode_logical_constraints(constraint_filename, mgr, domain):
     lines = [line.strip().split(" ")[1:] for line in lines]
     num_variables = int(lines[0][0])
 
-    constraints = []
+    constraints = {}
     cur = None
 
     for i in xrange(num_variables):
@@ -145,27 +179,27 @@ def encode_logical_constraints(constraint_filename, mgr, domain):
         key, thresh = metadata[0], float(metadata[1])
 
         if cur and cur[0] != key:
-            constraints.append( (cur[0] + "_%d", len(cur[1])) + tuple(cur[1]) )
+            constraints[cur[0] + "_%d"] =  (len(cur[1]),) + tuple(cur[1]) 
             cur = None
 
         if not cur:
             cur = (key, [thresh])
         else:
             cur[1].append(thresh)
-    constraints.append( (cur[0] + "_%d", len(cur[1])) + tuple(cur[1]) )
+    constraints[cur[0] + "_%d"] =  (len(cur[1]),) + tuple(cur[1])
  
     #print constraints
 
     alpha = sdd.sdd_manager_true(mgr)
 
-    for c in constraints:
-        high = int(c[1])
-        for i in xrange(1,high):
-            cur, last = c[0] % i, c[0] % (i-1) # c[0] is formattable string
-            beta = sdd.sdd_disjoin(sdd.sdd_manager_literal(-1*domain[cur],mgr), sdd.sdd_manager_literal(domain[last],mgr), mgr)
-            alpha = sdd.sdd_conjoin(alpha, beta, mgr)
+    for k,v in constraints.items():
+        high = v[0]
+        values = [domain[k % i] for i in xrange(0, high)]
 
-    return alpha
+        beta = encode_unique_constraint(values, mgr)
+        alpha = sdd.sdd_conjoin(alpha, beta, mgr)
+
+    return alpha, constraints
 
 
 def pick_next_tree(used_vars_list, used_vars):
@@ -352,19 +386,19 @@ def run():
         #sdd.sdd_manager_auto_gc_and_minimize_off(manager)
         sdd_state = SddState(vtree,manager)
 
+    with timer.Timer("reading constraints"):
+        constraint_sdd, constraint_info = encode_logical_constraints(constraint_filename,manager,domain)
+        sdd.sdd_ref(constraint_sdd,manager)
+
     with timer.Timer("reading trees"):
         tree_states = []
         for filename in sorted(glob.glob(tree_basename.replace('%d','*'))):
             tree = pygv.AGraph(filename)
-            tree_state = TreeState(tree,domain)
+            tree_state = TreeState(tree,domain,constraint_info,constraint_sdd)
             tree_states.append(tree_state)
             #tree.layout(prog='dot')
             #tree.draw(filename+".png")
         #num_trees = len(tree_states)
-
-    with timer.Timer("reading constraints"):
-        constraint_sdd = encode_logical_constraints(constraint_filename,manager,domain)
-        sdd.sdd_ref(constraint_sdd,manager)
 
     with timer.Timer("compiling trees"):
         forest_sdds, _ = izip(*forest_sdds_iter(tree_states,sdd_state))
@@ -389,6 +423,7 @@ def run():
 
     with timer.Timer("compiling all",prefix="| "):
         alpha = compile_all(forest_sdds,used_vars_list,num_trees,domain,manager,constraint_sdd)
+
     with timer.Timer("evaluating"):
         msg = util.evaluate_dataset_all_sdd(dataset,alpha,manager)
     print "|     trees : %d" % num_trees
